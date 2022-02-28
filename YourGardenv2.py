@@ -723,6 +723,8 @@ async def harvest(ctx, plot: int):
                 database.at[idx, 'Luck'] += 0.25
             if nsv == 625:
                 curgain = curgain * 2
+            sellmod = float(userrow.at[idx, 'Sell Modifier'])
+            curgain = curgain * sellmod
             database.at[idx, plotcol] = 1
             database.at[idx, 'Currency'] += curgain
             await ctx.send("A fine harvest of " + str(curgain) + " sanddollars.")
@@ -793,6 +795,7 @@ async def water(ctx):
         await ctx.send(":shower:\nWatering...\n:shower:")
         database.at[idx, 'Has Watered'] = True
         database.at[idx, 'Last Water'] = datetime_to_float(dt.now())
+        hardwrite()
     else:
         await ctx.send("You aren't playing! Do g$join to sign up.")
 
@@ -835,9 +838,55 @@ async def nightnight(ctx):
 
 
 # updater
-@tasks.loop(minutes=2)
+@tasks.loop(hours=3)
 async def update():
-    print("updated!")
+    channel = await bot.fetch_channel(945380648934330419)
+    global growmod
+    userlist = database['User'].tolist()
+    for user in userlist:
+        idx = database.loc[database['User'] == user].index[0]
+        # database.at[idx, "Has Watered"] = False
+        lastwater = float_to_datetime(database.at[idx, 'Last Water'])
+        delt = dt.now() - lastwater
+        hw = database.at[idx, 'Has Watered']
+        if delt > maxdelta:  # death timer
+            for i in range(0, 25):
+                plotcol = "plot" + str(i + 1) + "status"
+                plamt = database.at[idx, plotcol]
+                g = svgrowth(plamt)
+                if plamt % 343 == 0 and plamt % 2401 != 0:
+                    new = die(plant)
+                else:
+                    new = plamt
+                database.at[idx, plotcol] = new
+        elif delt < maxdelta and hw:  # grow if things are watered
+            for i in range(0, 25):
+                plotcol = "plot" + str(i + 1) + "status"
+                plamt = database.at[idx, plotcol]
+                g = svgrowth(plamt)
+                if plamt > 1 and g < 4:
+                    new = grow(plamt)
+                else:
+                    new = plamt
+                database.at[idx, plotcol] = new
+        database.at[idx, 'Has Watered'] = False
+        coll = unstring(database.at[idx, "Collection"])
+        gain = 0
+        for i in coll:
+            if i == 1:
+                if 0 < coll[i] < 4:
+                    gain += 2
+                elif 4 <= coll[i]:
+                    gain += 0.5
+        gain *= database.at[idx, 'Passive Modifier']
+        database.at[idx, 'Currency'] += gain
+    await channel.send("Update time! Time to water, and see if your plants have grown!")
+
+
+
+
+
+
 
 
 update.start()
